@@ -2,7 +2,7 @@
 
 FloatSpace is an experimental Android floating-window launcher for devices whose firmware does not provide native freeform or split-screen support. It uses an app-owned virtual display, a movable overlay window, and Shizuku for privileged app launching and input forwarding.
 
-> Current status: **0.4.0 alpha**. The compatibility engine uses a public own-content virtual display plus a Shizuku task-move fallback for firmware without native freeform support.
+> Current status: **0.4.1 alpha**. The Redmi A2 launch command now uses a ROM-compatible Intent flag bitmask, and the setup screen exposes every required state before an app can launch.
 
 ## Features
 

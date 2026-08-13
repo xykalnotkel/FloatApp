@@ -30,13 +30,15 @@ class RemoteService : IRemoteService.Stub() {
             ?: component.substringBefore('/')
         val stopped=execute("am","force-stop","--user","0",packageName)
         Thread.sleep(180)
+        // Redmi A2's Android 13 Go shell rejects the long-form activity flag
+        // options. Use the equivalent Intent bitmask instead:
+        // NEW_TASK (0x10000000) | MULTIPLE_TASK (0x08000000) |
+        // CLEAR_TASK (0x00008000) = 0x18008000.
         val started=execute(
             "am","start","-W","--user","0",
             "--display",displayId.toString(),
             "--windowingMode","1",
-            "--activity-new-task",
-            "--activity-multiple-task",
-            "--activity-clear-task",
+            "-f","0x18008000",
             "-n",component
         )
         Thread.sleep(350)

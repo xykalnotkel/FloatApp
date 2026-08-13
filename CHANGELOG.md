@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1-alpha
+
+- Fixed the Redmi A2 launch failure `Unknown option: --activity-new-task`.
+- Replaced unsupported shell options with the equivalent `0x18008000` Intent flag bitmask.
+- Rebuilt the main UI around four explicit readiness states: Shizuku, overlay permission, virtual display, and engine.
+- Added a single guided setup action that always performs the next missing step.
+- Applications cannot be launched until all prerequisites show ready.
+- Layout and size controls now have unmistakable selected states and contextual descriptions.
+- Size controls are hidden for top/bottom split layouts.
+- Added clear loading, launch failure, and no-frame messages inside each virtual window.
+- Added direct log-location guidance and a shorter Indonesian setup guide.
+
 ## 0.4.0-alpha
 
 - Changed the compatibility engine to a public, own-content virtual display so third-party activities can render on it.

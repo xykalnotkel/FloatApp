@@ -10,7 +10,9 @@ import android.graphics.SurfaceTexture
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.*
 import android.widget.*
@@ -33,7 +35,7 @@ class OverlayService:Service(){
     private var pending:Triple<String,Int,Int>?=null
     private val windows=mutableListOf<VirtualWindow>()
 
-    private inner class VirtualWindow(val component:String,val packageName:String,val layoutMode:Int,val root:LinearLayout,val params:WindowManager.LayoutParams,val texture:TextureView){
+    private inner class VirtualWindow(val component:String,val packageName:String,val layoutMode:Int,val root:LinearLayout,val params:WindowManager.LayoutParams,val texture:TextureView,val message:TextView){
         var display:VirtualDisplay?=null;var minimized=false;var maximized=false;var oldWidth=params.width;var oldHeight=params.height;var oldX=params.x;var oldY=params.y
     }
 
@@ -50,7 +52,7 @@ class OverlayService:Service(){
     }
     override fun onDestroy(){windows.toList().forEach{closeWindow(it,false)};handle?.let{runCatching{wm.removeView(it)}};panel?.let{runCatching{wm.removeView(it)}};LocalLogger.info("Layanan overlay dihentikan");super.onDestroy()}
 
-    private fun bindShizuku(){if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)return;val args=Shizuku.UserServiceArgs(ComponentName(this,RemoteService::class.java)).daemon(false).processNameSuffix("float").debuggable(BuildConfig.DEBUG).version(3);runCatching{Shizuku.bindUserService(args,connection)}.onFailure{LocalLogger.error("Overlay gagal bind Shizuku",it)}}
+    private fun bindShizuku(){if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=PackageManager.PERMISSION_GRANTED)return;val args=Shizuku.UserServiceArgs(ComponentName(this,RemoteService::class.java)).daemon(false).processNameSuffix("float").debuggable(BuildConfig.DEBUG).version(4);runCatching{Shizuku.bindUserService(args,connection)}.onFailure{LocalLogger.error("Overlay gagal bind Shizuku",it)}}
     private fun createNotification(){val id="floatspace_overlay";if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(id,"Floating windows",NotificationManager.IMPORTANCE_LOW));val open=PendingIntent.getActivity(this,1,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE);val n=Notification.Builder(this,id).setSmallIcon(R.drawable.ic_launcher).setContentTitle("FloatSpace aktif").setContentText("Mesin jendela virtual dan menu layar aktif").setContentIntent(open).setOngoing(true).build();if(Build.VERSION.SDK_INT>=34)startForeground(31,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)else startForeground(31,n)}
     private fun params(width:Int,height:Int,x:Int,y:Int)=WindowManager.LayoutParams(width,height,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT).apply{gravity=Gravity.TOP or Gravity.START;this.x=x;this.y=y}
     private fun rounded(color:Int,radius:Int,stroke:Int=Color.DKGRAY,width:Int=1)=android.graphics.drawable.GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat();setStroke(dp(width),stroke)}
@@ -85,15 +87,23 @@ class OverlayService:Service(){
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(4),dp(5),dp(4));background=rounded(Color.rgb(16,16,16),9,Color.rgb(55,55,55))}
         header.addView(ImageView(this).apply{setImageDrawable(info.loadIcon(packageManager));layoutParams=LinearLayout.LayoutParams(dp(28),dp(28))});header.addView(TextView(this).apply{text=info.loadLabel(packageManager);textSize=10f;setTextColor(Color.WHITE);setPadding(dp(8),0,0,0);layoutParams=LinearLayout.LayoutParams(0,-2,1f)})
         val min=smallButton("—").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31))};val max=smallButton("□").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31)).apply{marginStart=dp(4)}};val close=smallButton("×").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31)).apply{marginStart=dp(4)}};header.addView(min);header.addView(max);header.addView(close);root.addView(header,LinearLayout.LayoutParams(-1,dp(41)))
-        val texture=TextureView(this).apply{isOpaque=true;layoutParams=LinearLayout.LayoutParams(-1,0,1f)};root.addView(texture)
+        val content=FrameLayout(this).apply{setBackgroundColor(Color.BLACK);layoutParams=LinearLayout.LayoutParams(-1,0,1f)}
+        val texture=TextureView(this).apply{isOpaque=true;layoutParams=FrameLayout.LayoutParams(-1,-1)}
+        val message=TextView(this).apply{
+            text="Membuka ${info.loadLabel(packageManager)}…\nMenyiapkan virtual display"
+            textSize=11f;gravity=Gravity.CENTER;setTextColor(Color.LTGRAY)
+            setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.BLACK)
+            layoutParams=FrameLayout.LayoutParams(-1,-1)
+        }
+        content.addView(texture);content.addView(message);root.addView(content)
         val bottom=LinearLayout(this).apply{gravity=Gravity.RIGHT or Gravity.CENTER_VERTICAL;setBackgroundColor(Color.rgb(12,12,12))};val grip=TextView(this).apply{text="↘";textSize=16f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);layoutParams=LinearLayout.LayoutParams(dp(45),dp(23))};bottom.addView(grip);root.addView(bottom,LinearLayout.LayoutParams(-1,dp(24)))
-        val p=params(width,height,x,y);val holder=VirtualWindow(component,cn.packageName,requestedMode,root,p,texture);windows.add(holder);drag(header,p){};resizeVirtual(grip,holder)
+        val p=params(width,height,x,y);val holder=VirtualWindow(component,cn.packageName,requestedMode,root,p,texture,message);windows.add(holder);drag(header,p){};resizeVirtual(grip,holder)
         min.setOnClickListener{toggleMinimize(holder)};max.setOnClickListener{toggleMaximize(holder,sw,sh)};close.setOnClickListener{closeWindow(holder,true)}
         texture.surfaceTextureListener=object:TextureView.SurfaceTextureListener{
             override fun onSurfaceTextureAvailable(st:SurfaceTexture,w:Int,h:Int){createDisplay(holder,st,w,h,service)}
             override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int){holder.display?.resize(w.coerceAtLeast(1),h.coerceAtLeast(1),resources.displayMetrics.densityDpi)}
             override fun onSurfaceTextureDestroyed(st:SurfaceTexture):Boolean{holder.display?.surface=null;return true}
-            override fun onSurfaceTextureUpdated(st:SurfaceTexture){}
+            override fun onSurfaceTextureUpdated(st:SurfaceTexture){if(holder.message.visibility==View.VISIBLE)holder.message.visibility=View.GONE}
         }
         texture.setOnTouchListener{_,e->val vd=holder.display?:return@setOnTouchListener true;runCatching{service.injectTouch(vd.display.displayId,e.actionMasked,e.x,e.y,e.downTime,e.eventTime)};true}
         wm.addView(root,p);hidePanel();LocalLogger.info("Membuat jendela virtual ${cn.packageName}; mode=$requestedMode ukuran=${width}x$height")
@@ -117,7 +127,19 @@ class OverlayService:Service(){
             Thread{
                 val result=service.launchOnDisplay(holder.component,id)
                 LocalLogger.info("HASIL LAUNCH VIRTUAL\ndisplayId=$id\ncomponent=${holder.component}\n$result")
-                if(result.contains("start=0").not())LocalLogger.error("Launch virtual display bermasalah:\n$result")
+                if(result.contains("start=0").not()){
+                    LocalLogger.error("Launch virtual display bermasalah:\n$result")
+                    Handler(Looper.getMainLooper()).post{
+                        holder.message.text="Gagal membuka aplikasi\nBuka Cek sistem atau kirim error.txt"
+                        holder.message.setTextColor(Color.rgb(255,150,160));holder.message.visibility=View.VISIBLE
+                    }
+                }else{
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if(holder.message.visibility==View.VISIBLE){
+                            holder.message.text="Aplikasi berhasil dipanggil, tetapi belum mengirim tampilan.\nPeriksa info.txt jika tetap berhenti di sini."
+                        }
+                    },8000)
+                }
             }.start()
         }.onFailure{
             LocalLogger.error("Gagal membuat virtual display publik",it)
