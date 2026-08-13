@@ -1,7 +1,9 @@
 package io.xystudio.floatspace
 
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.os.Build
+import android.os.IBinder
 import android.view.InputDevice
 import android.view.MotionEvent
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -22,9 +24,66 @@ class RemoteService : IRemoteService.Stub() {
         return execute(*command.toTypedArray()).first
     }
 
-    override fun launchOnDisplay(component:String,displayId:Int):Int = execute(
-        "am","start","--user","0","--display",displayId.toString(),"--windowingMode","1","-n",component
-    ).first
+    @SuppressLint("BlockedPrivateApi", "PrivateApi", "DiscouragedPrivateApi")
+    override fun launchOnDisplay(component:String,displayId:Int):String {
+        val packageName=ComponentName.unflattenFromString(component)?.packageName
+            ?: component.substringBefore('/')
+        val stopped=execute("am","force-stop","--user","0",packageName)
+        Thread.sleep(180)
+        val started=execute(
+            "am","start","-W","--user","0",
+            "--display",displayId.toString(),
+            "--windowingMode","1",
+            "--activity-new-task",
+            "--activity-multiple-task",
+            "--activity-clear-task",
+            "-n",component
+        )
+        Thread.sleep(350)
+        val dump=execute("dumpsys","activity","activities").second
+        val taskId=findTaskId(dump,packageName)
+        val moved=if(taskId!=null)moveRootTaskToDisplay(taskId,displayId) else "task tidak ditemukan"
+        Thread.sleep(220)
+        val verification=execute("sh","-c","dumpsys activity activities | grep -E -B 3 -A 5 '${packageName.replace("'","")}' | head -n 32").second
+        return buildString {
+            appendLine("force-stop=${stopped.first}")
+            appendLine("start=${started.first}")
+            appendLine(started.second.ifBlank{"tanpa output"})
+            appendLine("taskId=${taskId ?: -1}")
+            appendLine("moveTask=$moved")
+            appendLine("targetDisplay=$displayId")
+            append("verifikasi:\n$verification")
+        }
+    }
+
+    private fun findTaskId(dump:String,packageName:String):Int? {
+        val lines=dump.lines()
+        val packageLine=lines.indexOfLast{it.contains(packageName)}
+        if(packageLine<0)return null
+        for(i in packageLine downTo maxOf(0,packageLine-40)){
+            val line=lines[i]
+            Regex("taskId=(\\d+)").find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let{return it}
+            Regex("Task\\{[^#]*#(\\d+)").find(line)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let{return it}
+        }
+        return null
+    }
+
+    @SuppressLint("BlockedPrivateApi", "PrivateApi", "DiscouragedPrivateApi")
+    private fun moveRootTaskToDisplay(taskId:Int,displayId:Int):String=try{
+        val serviceManager=Class.forName("android.os.ServiceManager")
+        val binder=serviceManager.getDeclaredMethod("getService",String::class.java)
+            .apply{isAccessible=true}.invoke(null,"activity_task") as IBinder
+        val stub=Class.forName("android.app.IActivityTaskManager$"+"Stub")
+        val manager=stub.getDeclaredMethod("asInterface",IBinder::class.java)
+            .apply{isAccessible=true}.invoke(null,binder)
+        val method=manager.javaClass.methods.firstOrNull{
+            it.name=="moveRootTaskToDisplay"&&it.parameterTypes.size==2
+        } ?: manager.javaClass.declaredMethods.first{
+            it.name=="moveRootTaskToDisplay"&&it.parameterTypes.size==2
+        }.apply{isAccessible=true}
+        method.invoke(manager,taskId,displayId)
+        "berhasil"
+    }catch(t:Throwable){"gagal ${t.javaClass.simpleName}: ${t.message}"}
 
     @SuppressLint("BlockedPrivateApi", "PrivateApi")
     override fun injectTouch(displayId:Int,action:Int,x:Float,y:Float,downTime:Long,eventTime:Long):Boolean = try {

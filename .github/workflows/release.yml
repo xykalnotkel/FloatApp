@@ -73,10 +73,10 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee APK-VERIFICATION.txt
           mkdir -p artifacts
-          cp "$APK" "artifacts/FloatSpace-${RELEASE_TAG}.apk"
+          cp "$APK" "artifacts/FloatSpace-${RELEASE_TAG}-universal.apk"
           cp APK-VERIFICATION.txt artifacts/
           cd artifacts
-          sha256sum "FloatSpace-${RELEASE_TAG}.apk" > SHA256SUMS.txt
+          sha256sum "FloatSpace-${RELEASE_TAG}-universal.apk" > SHA256SUMS.txt
 
       - name: Upload signed build artifact
         uses: actions/upload-artifact@v4

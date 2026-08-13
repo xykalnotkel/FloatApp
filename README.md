@@ -2,13 +2,15 @@
 
 FloatSpace is an experimental Android floating-window launcher for devices whose firmware does not provide native freeform or split-screen support. It uses an app-owned virtual display, a movable overlay window, and Shizuku for privileged app launching and input forwarding.
 
-> Current status: **0.3.1 alpha**. Tested by the developer build pipeline; device behavior still depends on OEM restrictions.
+> Current status: **0.4.0 alpha**. The compatibility engine uses a public own-content virtual display plus a Shizuku task-move fallback for firmware without native freeform support.
 
 ## Features
 
 - Virtual floating windows independent of native freeform firmware
 - Move, resize, minimize, maximize, and close controls
-- Virtual top/bottom split layout
+- Virtual top/bottom split host without native split-screen dependency
+- Public own-content virtual displays with task verification
+- One universal APK for ARM32, ARM64, x86, and x86_64 devices
 - Floating sidebar with favorite applications
 - Compact monochrome UI with restrained 8–12 dp corners
 - Shizuku Wireless Debugging support

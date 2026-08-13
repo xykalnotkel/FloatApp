@@ -33,8 +33,8 @@ class OverlayService:Service(){
     private var pending:Triple<String,Int,Int>?=null
     private val windows=mutableListOf<VirtualWindow>()
 
-    private inner class VirtualWindow(val component:String,val packageName:String,val root:LinearLayout,val params:WindowManager.LayoutParams,val texture:TextureView){
-        var display:VirtualDisplay?=null;var minimized=false;var oldWidth=params.width;var oldHeight=params.height
+    private inner class VirtualWindow(val component:String,val packageName:String,val layoutMode:Int,val root:LinearLayout,val params:WindowManager.LayoutParams,val texture:TextureView){
+        var display:VirtualDisplay?=null;var minimized=false;var maximized=false;var oldWidth=params.width;var oldHeight=params.height;var oldX=params.x;var oldY=params.y
     }
 
     private val connection=object:ServiceConnection{
@@ -69,17 +69,26 @@ class OverlayService:Service(){
         val service=remote?:run{pending=Triple(component,requestedMode,preset);bindShizuku();Toast.makeText(this,"Menghubungkan Shizuku…",Toast.LENGTH_SHORT).show();return}
         val cn=ComponentName.unflattenFromString(component)?:return;val info=runCatching{packageManager.getActivityInfo(cn,0)}.getOrNull()?:return
         val sw=resources.displayMetrics.widthPixels;val sh=resources.displayMetrics.heightPixels
+        val isSplit=requestedMode==3||requestedMode==4
+        if(isSplit)windows.filter{it.layoutMode==requestedMode}.toList().forEach{closeWindow(it,true)}
         val compactW=when(preset){1->(sw*.90).toInt();2->(sw*.94).toInt();else->(sw*.78).toInt()};val compactH=when(preset){1->(sh*.75).toInt();2->(sh*.45).toInt();else->(sh*.58).toInt()}
-        val width=if(requestedMode==5)compactW else sw-dp(12);val height=if(requestedMode==5)compactH else (sh-dp(70))/2
-        val x=if(requestedMode==5)(sw-width)/2 else dp(6);val y=when(requestedMode){3->dp(35);4->dp(39)+height;else->dp(95)+(windows.size*dp(18))}
-        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=rounded(Color.rgb(5,5,5),11,Color.rgb(105,105,105),1);elevation=dp(16).toFloat();clipToOutline=true}
+        val width=if(isSplit)sw else compactW
+        val height=if(isSplit)(sh/2) else compactH
+        val x=if(isSplit)0 else (sw-width)/2
+        val y=when(requestedMode){3->0;4->sh/2;else->dp(95)+(windows.size*dp(18))}
+        val root=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL
+            background=rounded(Color.rgb(5,5,5),if(isSplit)2 else 11,Color.rgb(105,105,105),1)
+            elevation=if(isSplit)0f else dp(16).toFloat()
+            clipToOutline=true
+        }
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(4),dp(5),dp(4));background=rounded(Color.rgb(16,16,16),9,Color.rgb(55,55,55))}
         header.addView(ImageView(this).apply{setImageDrawable(info.loadIcon(packageManager));layoutParams=LinearLayout.LayoutParams(dp(28),dp(28))});header.addView(TextView(this).apply{text=info.loadLabel(packageManager);textSize=10f;setTextColor(Color.WHITE);setPadding(dp(8),0,0,0);layoutParams=LinearLayout.LayoutParams(0,-2,1f)})
         val min=smallButton("—").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31))};val max=smallButton("□").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31)).apply{marginStart=dp(4)}};val close=smallButton("×").apply{layoutParams=LinearLayout.LayoutParams(dp(38),dp(31)).apply{marginStart=dp(4)}};header.addView(min);header.addView(max);header.addView(close);root.addView(header,LinearLayout.LayoutParams(-1,dp(41)))
         val texture=TextureView(this).apply{isOpaque=true;layoutParams=LinearLayout.LayoutParams(-1,0,1f)};root.addView(texture)
         val bottom=LinearLayout(this).apply{gravity=Gravity.RIGHT or Gravity.CENTER_VERTICAL;setBackgroundColor(Color.rgb(12,12,12))};val grip=TextView(this).apply{text="↘";textSize=16f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);layoutParams=LinearLayout.LayoutParams(dp(45),dp(23))};bottom.addView(grip);root.addView(bottom,LinearLayout.LayoutParams(-1,dp(24)))
-        val p=params(width,height,x,y);val holder=VirtualWindow(component,cn.packageName,root,p,texture);windows.add(holder);drag(header,p){};resizeVirtual(grip,holder)
-        min.setOnClickListener{toggleMinimize(holder)};max.setOnClickListener{holder.oldWidth=p.width;holder.oldHeight=p.height;p.x=dp(5);p.y=dp(30);p.width=sw-dp(10);p.height=sh-dp(65);wm.updateViewLayout(root,p)};close.setOnClickListener{closeWindow(holder,true)}
+        val p=params(width,height,x,y);val holder=VirtualWindow(component,cn.packageName,requestedMode,root,p,texture);windows.add(holder);drag(header,p){};resizeVirtual(grip,holder)
+        min.setOnClickListener{toggleMinimize(holder)};max.setOnClickListener{toggleMaximize(holder,sw,sh)};close.setOnClickListener{closeWindow(holder,true)}
         texture.surfaceTextureListener=object:TextureView.SurfaceTextureListener{
             override fun onSurfaceTextureAvailable(st:SurfaceTexture,w:Int,h:Int){createDisplay(holder,st,w,h,service)}
             override fun onSurfaceTextureSizeChanged(st:SurfaceTexture,w:Int,h:Int){holder.display?.resize(w.coerceAtLeast(1),h.coerceAtLeast(1),resources.displayMetrics.densityDpi)}
@@ -91,9 +100,41 @@ class OverlayService:Service(){
     }
 
     private fun createDisplay(holder:VirtualWindow,st:SurfaceTexture,w:Int,h:Int,service:IRemoteService){
-        runCatching{val surface=Surface(st);val vd=displays.createVirtualDisplay("FloatSpace-${System.nanoTime()}",w.coerceAtLeast(1),h.coerceAtLeast(1),resources.displayMetrics.densityDpi,surface,DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION);holder.display=vd;val id=vd.display.displayId;LocalLogger.info("Virtual display dibuat id=$id size=${w}x$h");Thread{val result=service.launchOnDisplay(holder.component,id);LocalLogger.info("Launch virtual display id=$id hasil=$result component=${holder.component}");if(result!=0)LocalLogger.error("Launch virtual display gagal: kode $result")}.start()}.onFailure{LocalLogger.error("Gagal membuat virtual display",it);Toast.makeText(this,"Virtual display gagal: ${it.message}",Toast.LENGTH_LONG).show()}
+        runCatching{
+            val surface=Surface(st)
+            val flags=DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+            val vd=displays.createVirtualDisplay(
+                "FloatSpace-${System.nanoTime()}",
+                w.coerceAtLeast(1),h.coerceAtLeast(1),
+                resources.displayMetrics.densityDpi,
+                surface,flags
+            )
+            holder.display=vd
+            val id=vd.display.displayId
+            LocalLogger.info("Virtual display publik dibuat id=$id flags=$flags size=${w}x$h")
+            Thread{
+                val result=service.launchOnDisplay(holder.component,id)
+                LocalLogger.info("HASIL LAUNCH VIRTUAL\ndisplayId=$id\ncomponent=${holder.component}\n$result")
+                if(result.contains("start=0").not())LocalLogger.error("Launch virtual display bermasalah:\n$result")
+            }.start()
+        }.onFailure{
+            LocalLogger.error("Gagal membuat virtual display publik",it)
+            Toast.makeText(this,"Virtual display gagal: ${it.message}",Toast.LENGTH_LONG).show()
+        }
     }
     private fun toggleMinimize(h:VirtualWindow){if(!h.minimized){h.oldWidth=h.params.width;h.oldHeight=h.params.height;h.texture.visibility=View.GONE;h.params.width=dp(170);h.params.height=dp(45);h.minimized=true}else{h.params.width=h.oldWidth;h.params.height=h.oldHeight;h.texture.visibility=View.VISIBLE;h.minimized=false};wm.updateViewLayout(h.root,h.params)}
+    private fun toggleMaximize(h:VirtualWindow,screenWidth:Int,screenHeight:Int){
+        if(!h.maximized){
+            h.oldWidth=h.params.width;h.oldHeight=h.params.height;h.oldX=h.params.x;h.oldY=h.params.y
+            h.params.x=0;h.params.y=0;h.params.width=screenWidth;h.params.height=screenHeight
+        }else{
+            h.params.x=h.oldX;h.params.y=h.oldY;h.params.width=h.oldWidth;h.params.height=h.oldHeight
+        }
+        h.maximized=!h.maximized
+        wm.updateViewLayout(h.root,h.params)
+    }
     private fun closeWindow(h:VirtualWindow,stopApp:Boolean){if(stopApp)Thread{remote?.forceStop(h.packageName)}.start();h.display?.release();h.display=null;runCatching{wm.removeView(h.root)};windows.remove(h);LocalLogger.info("Jendela virtual ditutup: ${h.packageName}")}
 
     private fun drag(view:View,p:WindowManager.LayoutParams,click:()->Unit){view.setOnTouchListener(object:View.OnTouchListener{var sx=0f;var sy=0f;var ox=0;var oy=0;var moved=false;override fun onTouch(v:View,e:android.view.MotionEvent):Boolean{when(e.action){0->{sx=e.rawX;sy=e.rawY;ox=p.x;oy=p.y;moved=false;return true};2->{if(abs(e.rawX-sx)>5||abs(e.rawY-sy)>5)moved=true;p.x=ox+(e.rawX-sx).toInt();p.y=oy+(e.rawY-sy).toInt();val target=when{v===handle->handle;panel!=null&&v.parent===panel->panel;else->(v.parent as? View)};target?.let{runCatching{wm.updateViewLayout(it,p)}};return true};1->{if(!moved)click();return true}};return false}})}

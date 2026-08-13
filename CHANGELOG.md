@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-alpha
+
+- Changed the compatibility engine to a public, own-content virtual display so third-party activities can render on it.
+- Force-stops an existing task before virtual launch to prevent Android from bringing the fullscreen task forward.
+- Launches targets with new-task, multiple-task, and clear-task flags.
+- Added a privileged `moveRootTaskToDisplay` fallback through the Shizuku activity-task binder.
+- Added detailed launch, task, display, and verification output to `info.txt`.
+- Reworked Split A/B into flush top and bottom virtual regions instead of rounded floating cards.
+- Prevents multiple windows from overlapping in the same split slot.
+- Added maximize/restore toggle.
+- Explicitly produces one universal APK without ABI or density splits.
+
 ## 0.3.1-alpha
 
 - Fixed Redmi A2 crash: `TextureView doesn't support displaying a background drawable`.
