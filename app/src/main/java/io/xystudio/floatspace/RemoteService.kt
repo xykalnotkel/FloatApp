@@ -1,5 +1,6 @@
 package io.xystudio.floatspace
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -25,6 +26,7 @@ class RemoteService : IRemoteService.Stub() {
         "am","start","--user","0","--display",displayId.toString(),"--windowingMode","1","-n",component
     ).first
 
+    @SuppressLint("BlockedPrivateApi", "PrivateApi")
     override fun injectTouch(displayId:Int,action:Int,x:Float,y:Float,downTime:Long,eventTime:Long):Boolean = try {
         val event=MotionEvent.obtain(downTime,eventTime,action,x,y,0).apply{source=InputDevice.SOURCE_TOUCHSCREEN}
         MotionEvent::class.java.getDeclaredMethod("setDisplayId",Int::class.javaPrimitiveType).apply{isAccessible=true}.invoke(event,displayId)

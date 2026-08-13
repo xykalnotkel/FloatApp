@@ -50,6 +50,12 @@ android {
         }
     }
 
+    lint {
+        // FloatSpace intentionally uses this hidden API from its Shizuku shell process
+        // to route touch events to an app-owned virtual display.
+        disable += "BlockedPrivateApi"
+    }
+
     buildFeatures {
         viewBinding = false
         aidl = true
