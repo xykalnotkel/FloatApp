@@ -1,0 +1,22 @@
+*.iml
+.gradle/
+.kotlin/
+local.properties
+.idea/
+.DS_Store
+build/
+**/build/
+.externalNativeBuild/
+.cxx/
+.signing/
+*.jks
+*.keystore
+*.p12
+captures/
+
+# Logs and local test output
+logs/
+*.log
+crash.txt
+error.txt
+info.txt

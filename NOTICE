@@ -1,0 +1,12 @@
+FloatSpace
+Copyright 2026 XySTUDIO
+
+FloatSpace uses the Shizuku API (Apache License 2.0) and HiddenApiBypass.
+
+The Virtual Display Compatibility Engine was independently implemented for FloatSpace after studying the virtual-display and Shizuku technique demonstrated by:
+
+SimpleVirtualDisplay by kangrio
+https://github.com/kangrio/SimpleVirtualDisplay
+Licensed under the Apache License 2.0.
+
+Android, MIUI, Redmi, WhatsApp, and other names are trademarks of their respective owners. FloatSpace is not affiliated with Xiaomi, Google, or Meta.

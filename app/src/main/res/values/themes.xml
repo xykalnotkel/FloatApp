@@ -1,0 +1,12 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.FloatSpace" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/space_bg</item>
+        <item name="android:navigationBarColor">@color/space_bg</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="colorPrimary">@color/space_primary</item>
+        <item name="colorSecondary">@color/space_cyan</item>
+        <item name="android:colorAccent">@color/space_primary</item>
+    </style>
+</resources>
